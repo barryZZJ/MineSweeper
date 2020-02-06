@@ -38,7 +38,7 @@ class GameUtil(object):
         # --------------------------------------------------------------
         # init new map
         self.map = _map
-        # map genarates on first click
+        # map genarates on first click, not here
         # map.generate()
 
         # --------------------------------------------------------------

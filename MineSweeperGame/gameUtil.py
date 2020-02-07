@@ -1,3 +1,5 @@
+import time
+
 from MineSweeperGame.mapGen import *
 from MineSweeperGame.constants import *
 from Algorithm.main import AlgoSolver
@@ -6,8 +8,12 @@ import pygame
 from pygame.locals import *
 
 from math import ceil
+from itertools import count
+
 
 class GameUtil(object):
+    FONT_YAHEI = 'msyh'
+    FONT_HEITI = 'simhei'
 
     def __init__(self):
         pygame.init()
@@ -17,8 +23,9 @@ class GameUtil(object):
         self.map = None #type: Map
         self.tile_list = None #type: List[pygame.Surface]
         self.clickResult = None #type: ClickResult
-        self.algo = None #type: bool
+        self.enable_algo = None #type: bool
         self.AlgoSolver = None #type: AlgoSolver
+        self.fontObj = pygame.font.SysFont(self.FONT_YAHEI, 50)
 
     def _blitAllBlocks(self):
         # blit all blocks to screen
@@ -27,11 +34,15 @@ class GameUtil(object):
             self.screen.blit(self.tile_list[tile_i],
                         (int((y - 1) * TILE_WIDTH * self.SCALE), int((x - 1) * TILE_HEIGHT * self.SCALE)))
 
-    def startNewGame(self, algo: Optional[bool]=False, _map: Optional[Map] = Map(Difficulty.NORMAL), scale: Optional[float] = 0.5 ):
-        '''
-        :param ``algo``: use algorithm sovling or not
-        :param ``scale``: scale the size of the screen
-        '''
+    # def _blitText(self,fontObj: pygame.font.Font, text, dest: Tuple[int, int]) -> None:
+    #     textSurf = fontObj.render(text, True, (0,0,0)) # Black
+    #     self.screen.blit(textSurf, dest)
+
+    def startNewGame(self, enable_algo: Optional[bool]=False, _map: Optional[Map] = Map(Difficulty.NORMAL), scale: Optional[float] = 0.5):
+        """
+        :param enable_algo: use algorithm sovling or not
+        :param scale: scale the size of the screen
+        """
         # --------------------------------------------------------------
         # set resize scale
         self.SCALE = scale
@@ -40,6 +51,9 @@ class GameUtil(object):
         self.map = _map
         # map genarates on first click, not here
         # map.generate()
+
+        # 根据map长宽确定每一格对应的rect大小和位置
+        self._load_All_Blocks_Rects()
 
         # --------------------------------------------------------------
         # set screen
@@ -55,7 +69,7 @@ class GameUtil(object):
 
         # load tile list
         self.tile_list = self._load_tile_list(PATH.TILE_TABLE, TILE_WIDTH, TILE_HEIGHT)
-        
+
         # blit all blocks from map to screen
         self._blitAllBlocks()
         # --------------------------------------------------------------
@@ -65,40 +79,38 @@ class GameUtil(object):
         # draw to main
         pygame.display.update()
 
-        # load all blocks rects
-        self._load_All_Blocks_Rects()
+        # --------------------------------------------------------------
 
-        # block keyboard events
+        # # block keyboard events
         # pygame.event.set_blocked([pygame.KEYDOWN, pygame.KEYUP])
 
         # --------------------------------------------------------------
         # algo initialization (responsive to keyboard)
-        self.algo = algo
-        if DEBUG:
-            from Algorithm.main import Debugger
-            debugger = Debugger(
-                screen=self.screen,
-                tile_list = self.tile_list,
-                TILE_WIDTH = TILE_WIDTH,
-                SCALE = self.SCALE,
-                TILE_HEIGHT=TILE_HEIGHT,
-                pygame=pygame
-            )
-            self.AlgoSolver = AlgoSolver(_map, debugger)
-        else:
-            self.AlgoSolver = AlgoSolver(_map)
+        self.enable_algo = enable_algo
+        if enable_algo:
+            if DEBUG:
+                from Algorithm.main import Debugger
+                debugger = Debugger(
+                    screen=self.screen,
+                    tile_list = self.tile_list,
+                    TILE_WIDTH = TILE_WIDTH,
+                    SCALE = self.SCALE,
+                    TILE_HEIGHT=TILE_HEIGHT,
+                    pygame=pygame
+                )
+                self.AlgoSolver = AlgoSolver(self.map, debugger)
+            else:
+                self.AlgoSolver = AlgoSolver(self.map)
         # --------------------------------------------------------------
         # enter main loop
         self._main_loop()
-        # --------------------------------------------------------------
-        # game end
-        print("exited")
-        pygame.display.quit()
+
 
     def _main_loop(self):
         # main loop
         imgi=0
-        while not (self.clickResult.isLose() or self.clickResult.isWin()):
+        exitFlag = Flag()
+        for rnd in count(1): # 无限循环直到按下esc
             dirty_rects = list()  # type: List[pygame.Rect]
             dirty_poses = list()  # type: List[Tuple[int, int]]
 
@@ -136,7 +148,8 @@ class GameUtil(object):
                             self.screen.blit(self.tile_list[tile_i], (
                             int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
                         # log dirty rects for update screen
-                        self._log_dirty_rects(dirty_rects, dirty_poses)
+                        for x, y in dirty_poses:
+                            dirty_rects.append(self.block_rects[x - 1][y - 1])
 
                 elif event.type == KEYUP:
                     if event.key == K_RETURN:
@@ -145,7 +158,12 @@ class GameUtil(object):
                         pygame.image.save(self.screen, f"currMap{imgi}.png")
                         print(f"Screen shot currMap{imgi}.png")
                         imgi+=1
-                    elif self.algo:
+                    elif event.key == K_ESCAPE:
+                        # esc 退出游戏
+                        pygame.display.quit()
+                        exitFlag.set()
+                        break
+                    elif self.enable_algo:
                         self.clickResult = self.AlgoSolver.step(dirty_poses)
                         if not DEBUG:
                             # blit dirty blocks
@@ -154,7 +172,8 @@ class GameUtil(object):
                                 self.screen.blit(self.tile_list[tile_i], (
                                     int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
                             # log dirty rects for update screen
-                            self._log_dirty_rects(dirty_rects, dirty_poses)
+                            for x, y in dirty_poses:
+                                dirty_rects.append(self.block_rects[x - 1][y - 1])
                         else:
                             # blit all blocks
                             for _x, _y, thisBlock in self.map.allBlocksM():
@@ -163,6 +182,27 @@ class GameUtil(object):
                                     int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
                 # else: print(str(event))
 
+            # 退出游戏
+            if exitFlag.get():
+                print("游戏已退出")
+                break
+
+            # 本轮游戏结束
+            if self.clickResult.isLose() or self.clickResult.isWin():
+                if self.clickResult.isLose():
+                    textSurf = self.fontObj.render(f"第{rnd}轮失败！重新开始...", True, (0, 0, 0)) #type: pygame.Surface  # text, 抗锯齿, color = Black
+                    print(f"第{rnd}轮失败！重新开始...")
+                else:
+                    textSurf = self.fontObj.render(f"第{rnd}轮失败！重新开始...", True, (0, 0, 0)) #type: pygame.Surface  # text, 抗锯齿, color = Black
+
+                    self.map.set_mines2pinks() # 把雷都变成粉色块
+                    print(f"第{rnd}轮胜利！重新开始...")
+
+                self.screen.blit(textSurf, ((self.screen.get_width()-textSurf.get_width())//2, (self.screen.get_height()-textSurf.get_height())//2)) # 生成黑色文字在屏幕中间
+
+                pygame.display.update()
+                time.sleep(5)
+                continue
 
             # update dirty rects
             if not DEBUG:
@@ -170,9 +210,39 @@ class GameUtil(object):
             else:
                 pygame.display.update()
 
-        # TODO 游戏结束操作
-        # todo WIN操作
+
         # TODO display mine cnt
+
+    def game_reset(self) -> None:
+        """重置游戏"""
+        # 重置mm和其他参数
+        self.map.reset()
+
+        # blit all blocks from map to screen
+        self._blitAllBlocks()
+
+        # reset click state
+        self.clickResult = ClickResult(RESULT.CONTINUE_CHANGED)
+
+        # draw to main
+        pygame.display.update()
+
+        # --------------------------------------------------------------
+        # algo initialization (responsive to keyboard)
+        if self.enable_algo:
+            if DEBUG:
+                from Algorithm.main import Debugger
+                debugger = Debugger(
+                    screen=self.screen,
+                    tile_list=self.tile_list,
+                    TILE_WIDTH=TILE_WIDTH,
+                    SCALE=self.SCALE,
+                    TILE_HEIGHT=TILE_HEIGHT,
+                    pygame=pygame
+                )
+                self.AlgoSolver = AlgoSolver(self.map, debugger)
+            else:
+                self.AlgoSolver = AlgoSolver(self.map)
 
     def _load_tile_list(self, filename, width, height) -> List[pygame.Surface]:
         image = pygame.image.load(filename).convert_alpha() # type: pygame.Surface
@@ -188,26 +258,20 @@ class GameUtil(object):
             tile_list.extend(line)
         return tile_list
 
-
     def _do_Left_Click(self, x, y, dirty_poses: List[Tuple[int, int]]) -> None:
         self.clickResult = self.map.leftClick(x, y, dirty_poses)
-        #other stuff like animation
+        #TODO other stuff like animation
 
     def _do_Mid_Click(self, x, y, dirty_poses: List[Tuple[int, int]]) -> None:
         self.clickResult = self.map.midClick(x, y, dirty_poses)
-        #other stuff like animation
+        #TODO other stuff like animation
 
     def _do_Right_Click(self, x, y, dirty_poses: List[Tuple[int, int]]) -> None:
         self.clickResult = self.map.rightClick(x, y, dirty_poses)
-        #other stuff like animation
-
-    def _log_dirty_rects(self, dirty_rects: List[pygame.Rect], dirty_poses: List[Tuple[int, int]]) -> None:
-        # log diry rects
-        for x, y in dirty_poses:
-            dirty_rects.append(self.block_rects[x - 1][y - 1])
+        #TODO other stuff like animation
 
     def _load_All_Blocks_Rects(self):
-        # 每一格对应的rect对象
+        """根据map长宽确定每一格对应的rect大小和位置"""
         self.block_rects = [] # type: List[List[pygame.Rect]]
         for i in range(self.map.get_nums[0]):
             tmp = []

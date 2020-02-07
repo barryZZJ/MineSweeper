@@ -3,8 +3,8 @@ class Flag(object):
     def __init__(self, set: Optional[bool] = False):
         self._state = set
 
-    def set(self):
-        self._state = True
+    def set(self, state=True):
+        self._state = state
 
     def reset(self):
         self._state = False

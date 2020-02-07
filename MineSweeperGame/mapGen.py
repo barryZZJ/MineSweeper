@@ -28,24 +28,20 @@ class BlockType(IntEnum):
     NEW_FLAG = 12 # for algorithm
     PINK = 13
     QUESTION = 14
+    NA = 15 # map的第0行和第0列不应该被显示，设置为无效块
 
 class Block(object):
-    def __init__(self, blocktype: Union[BlockType, int, None] = None, x=None, y=None):
+    def __init__(self, blocktype: Union[BlockType, int, None] = BlockType.NA, x=None, y=None):
         # self.x = x
         # self.y = y
         self._blocktype : BlockType
-        if blocktype:
-            # has arg
-            if isinstance(blocktype, BlockType):
-                # is BlockType
-                self._blocktype = blocktype
-            elif isinstance(blocktype, int):
-                # is int
-                assert (0<=blocktype<=8)
-                self._blocktype = BlockType(blocktype)
-        else:
-            # no arg
-            self._blocktype = BlockType.NUM_0
+        if isinstance(blocktype, BlockType):
+            # is BlockType
+            self._blocktype = blocktype
+        elif isinstance(blocktype, int):
+            # is int
+            assert (0<=blocktype<=8)
+            self._blocktype = BlockType(blocktype)
 
     # def getPos(self) -> Tuple[int, int]:
     #     return self.x, self.y
@@ -60,7 +56,7 @@ class Block(object):
         return self._blocktype == BlockType.MINE
 
     def notMine(self) -> bool:
-        return self._blocktype != BlockType.MINE
+        return self._blocktype != BlockType.NA and self._blocktype != BlockType.MINE
 
     def isEmpty(self) -> bool:
         return self._blocktype == BlockType.NUM_0
@@ -72,7 +68,7 @@ class Block(object):
         return self._blocktype == BlockType.CLOSED
 
     def isOpened(self) -> bool:
-        return self._blocktype != BlockType.CLOSED and self._blocktype != BlockType.FLAG and self._blocktype != BlockType.NEW_FLAG
+        return not (self._blocktype == BlockType.NA or self._blocktype == BlockType.CLOSED or self._blocktype == BlockType.FLAG or self._blocktype == BlockType.NEW_FLAG)
 
     def isNum(self, num: Optional[int] = None) -> bool:
         if num:
@@ -255,14 +251,15 @@ class Map(object):
         self._MAPr = None
         self._MAPm = None
 
-    def restart(self):
+    def reset(self):
         '''重置'''
         self._MAPr = None  # type: List[List[Block]] # real map
         # -----------------------------------------------------
         # regenerate mask map
-        for block in self._MAPm:
-            block : Block
-            block.setType(BlockType.CLOSED)
+        for row in self._MAPm:
+            for block in row:
+                block : Block
+                block.setType(BlockType.CLOSED)
         # -----------------------------------------------------
         # record remaining closed blocks to determine wether game won
         self._closed_cnt = None  # type: int
@@ -285,17 +282,18 @@ class Map(object):
         # -----------------------------------------------------
         # randomly put mines
         # self._MAPr = [[Block(i, j) for j in range(self._NUM_Y+1)] for i in range(self._NUM_X+1)]
-        self._MAPr = [[Block() for j in range(self._NUM_Y+1)] for i in range(self._NUM_X+1)]
+        self._MAPr = [[Block(BlockType.NUM_0) for j in range(self._NUM_Y+1)] for i in range(self._NUM_X+1)]
 
-        # 打乱(0~_NUM_X, 0~_NUM_Y)，取Mines个Tuple放雷，防止直接生成随机数导致重复
-        tmp = [(i, j) for i in range(self._NUM_X) for j in range(self._NUM_Y)]
-        random.shuffle(tmp)
+        # 太慢了
+        # # 打乱(0~_NUM_X, 0~_NUM_Y)，取Mines个Tuple放雷，防止直接生成随机数导致重复
+        # tmp = [(i, j) for i in range(self._NUM_X) for j in range(self._NUM_Y)]
+        # random.shuffle(tmp)
 
         mines = 0
         while mines != self._MINES:
-            x, y = tmp[mines]
-            if not self.isNeighbor((x,y), noMinePos):
-                # noMinePos and its neighbor shouldn't have mines
+            x, y = random.randint(0,self._NUM_X), random.randint(0,self._NUM_Y)
+            # 如果x，y之前没有被设置过雷，且不在noMinePos的Neighbor中，则设为雷
+            if not self._MAPr[x][y].isMine() and not self.isNeighbor((x,y), noMinePos):
                 self._MAPr[x][y].setType(BlockType.MINE)
                 mines += 1
         # -----------------------------------------------------
@@ -307,6 +305,11 @@ class Map(object):
                         # num++
                         num = neighbor.getNum()
                         neighbor.setType(num + 1)
+
+    def set_mines2pinks(self):
+        """获胜时使用，把所有雷变成粉色块"""
+        for x, y, block in self.allBlocksM():
+            block.setType(BlockType.PINK)
 
     def rightClick(self, x, y, dirty_poses: Optional[List[Tuple[int, int]]] = None) -> ClickResult:
         # If Closed:

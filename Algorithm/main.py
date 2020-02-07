@@ -50,14 +50,6 @@ class AlgoSolver(object):
         self._map = _map
         self._move_cnt = 0
 
-    def _getAllNumBlocks(self) -> Generator[Tuple[int, int, MSG.mapGen.Block], None, None]:
-        # l = list()
-        for x in range(1, self._map.get_nums[0]+1):
-            for y in range(1, self._map.get_nums[1]+1):
-                if self._map.mm[x][y].isNum():
-                    yield x, y, self._map.mm[x][y]
-        # return l
-
     def solve(self, dirty_poses: Optional[List[Tuple[int, int]]]=None, _map: Optional[MSG.mapGen.Map]=None) -> MoveResult:
         # :keep moving until win/lose/noMoveLeft
 
@@ -98,6 +90,7 @@ class AlgoSolver(object):
         return moveRes
 
     def _easyMove(self, dirty_poses: Optional[List[Tuple[int, int]]]) -> MoveResult:
+        # 只走一步
         # seudo:
         # hasMoved = Flag()
         # for numBlock in numBlocks:
@@ -115,13 +108,13 @@ class AlgoSolver(object):
                 # raise tooManyFlagsError
         # return hasMoved.get()
 
-        hasMoved = Flag()
         clickRes : MSG.mapGen.ClickResult
 
-        for x, y, numBlock in self._getAllNumBlocks():
+        for x, y, numBlock in self._map.allNumBlocksM():
             flag_cnt = closed_cnt = 0
             closed_neighbors = list() #type: List[Tuple[int, int]]
 
+            # 获取numBlock邻居的closed数和flag数
             for nx, ny, neighbor in self._map.neighborBlocksM(x, y):
                 if neighbor.isClosed():
                     closed_neighbors.append((nx, ny))
@@ -129,22 +122,23 @@ class AlgoSolver(object):
                 elif neighbor.isFlag():
                     flag_cnt += 1
 
-            if closed_cnt != 0 :
+            if closed_cnt != 0:
+                # 只考虑邻居有closed块的
                 if flag_cnt <= numBlock.getNum():
                     if closed_cnt + flag_cnt == numBlock.getNum():
-                        # set flag
+                        # can set flag
                         for closed_neighbor in closed_neighbors:
                             self._map.rightClick(*closed_neighbor, dirty_poses)
-                        hasMoved.set()
+                        return MoveResult(RESULT.CONTINUE_CHANGED)
                     elif flag_cnt == numBlock.getNum():
-                        # quick open
+                        # can quick open
                         clickRes = self._map.midClick(x, y, dirty_poses)
-                        hasMoved.set()
                         if clickRes.isWin(): return MoveResult(RESULT.WIN)
                         elif clickRes.isLose(): return MoveResult(RESULT.LOSE)
+                        else: return MoveResult(RESULT.CONTINUE_CHANGED)
                 else:
                     raise Exception("more flags than number!")
-        return MoveResult(RESULT.CONTINUE_CHANGED) if hasMoved.get() else MoveResult(RESULT.CONTINUE_NOCHANGE)
+        return MoveResult(RESULT.CONTINUE_NOCHANGE)
 
     def _violentEnumMove(self, dirty_poses: Optional[List[Tuple[int, int]]]) -> MoveResult:
         # nextClosedBlocks = list of all closed blocks who is next to a numbered block
@@ -309,7 +303,7 @@ class AlgoSolver(object):
             # If sum(numBlock.surround_flags + numBlock.surround_new_flags) == num:
             # Return True
         FAIL_CONT_FLAG = Flag()#优先返回旗多时的剪枝，如果没有剪枝再返回是继续还是验证成功
-        for x, y, numBlock in self._getAllNumBlocks():
+        for x, y, numBlock in self._map.allNumBlocksM():
             o_flag_cnt = n_flag_cnt = 0
             o_opened_cnt = n_opened_cnt = 0
             for nx, ny, neighbor in self._map.neighborBlocksCustom(x, y, currMap):

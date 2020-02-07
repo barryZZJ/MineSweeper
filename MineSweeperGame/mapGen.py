@@ -169,7 +169,7 @@ class Map(object):
     def __init__(self, difficulty: Optional[Difficulty] = Difficulty.NORMAL, seed:Optional[int]=None):
         '''生成后记得调用generate'''
 
-        self._NUM_X, self._NUM_Y, self._MINES = Map.getMapInfo(difficulty)
+        self._NUM_X, self._NUM_Y, self._MINE_cnt = Map.getMapInfo(difficulty)
 
         self._MAPr = None # type: List[List[Block]] # real map
         # -----------------------------------------------------
@@ -229,6 +229,13 @@ class Map(object):
             for y in range(1, self._NUM_Y+1):
                 yield x, y, self._MAPr[x][y]
 
+    def allNumBlocksM(self) -> Generator[Tuple[int, int, Block], None, None]:
+        # l = list()
+        for x in range(1, self._NUM_X+1):
+            for y in range(1, self._NUM_Y+1):
+                if self._MAPm[x][y].isNum():
+                    yield x, y, self._MAPm[x][y]
+
     @staticmethod
     def isNeighbor(pos1: Tuple[int, int], pos2: Tuple[int, int]) -> bool:
         # determine if two tuples are neighbors (around each other)
@@ -241,10 +248,10 @@ class Map(object):
             try:
                 self._NUM_X = int(input("Map width (9~30): "))  # type: int
                 self._NUM_Y = int(input("Map height (9~24): "))  # type: int
-                self._MINES = int(input("Mine count (10~667): "))  # type: int
+                self._MINE_cnt = int(input("Mine count (10~667): "))  # type: int
                 assert (9 <= self._NUM_X <= 30)
                 assert (9 <= self._NUM_Y <= 24)
-                assert (10 <= self._MINES <= 667)
+                assert (10 <= self._MINE_cnt <= 667)
                 break
             except AssertionError:
                 print("Input range error, try again")
@@ -271,18 +278,17 @@ class Map(object):
         # to determine if first click in self.leftClick()
         self.firstGen = True
 
-
     def generate(self, noMinePos: Optional[Tuple[int, int]] = (-1, -1)):
         # generate new map
         random.seed(self.seed)
 
         self.firstGen = False # to determine if first click in self.leftClick(), generate on first click
-        self._closed_cnt = self._NUM_X * self._NUM_Y - self._MINES # to determine wether game won
-        self._mine_cnt = self._MINES
+        self._closed_cnt = self._NUM_X * self._NUM_Y # to determine wether game won: closed_cnt == mine_cnt
+        self._mine_cnt = self._MINE_cnt
         # -----------------------------------------------------
         # randomly put mines
-        # self._MAPr = [[Block(i, j) for j in range(self._NUM_Y+1)] for i in range(self._NUM_X+1)]
-        self._MAPr = [[Block(BlockType.NUM_0) for j in range(self._NUM_Y+1)] for i in range(self._NUM_X+1)]
+        # 如果j或i是0，设为墙，其他设为NUM0
+        self._MAPr = [[Block(BlockType.NA if j*i == 0 else BlockType.NUM_0) for j in range(self._NUM_Y+1)] for i in range(self._NUM_X+1)]
 
         # 太慢了
         # # 打乱(0~_NUM_X, 0~_NUM_Y)，取Mines个Tuple放雷，防止直接生成随机数导致重复
@@ -290,8 +296,8 @@ class Map(object):
         # random.shuffle(tmp)
 
         mines = 0
-        while mines != self._MINES:
-            x, y = random.randint(0,self._NUM_X), random.randint(0,self._NUM_Y)
+        while mines != self._MINE_cnt:
+            x, y = random.randint(1,self._NUM_X), random.randint(1,self._NUM_Y)
             # 如果x，y之前没有被设置过雷，且不在noMinePos的Neighbor中，则设为雷
             if not self._MAPr[x][y].isMine() and not self.isNeighbor((x,y), noMinePos):
                 self._MAPr[x][y].setType(BlockType.MINE)
@@ -306,10 +312,12 @@ class Map(object):
                         num = neighbor.getNum()
                         neighbor.setType(num + 1)
 
-    def set_mines2pinks(self):
-        """获胜时使用，把所有雷变成粉色块"""
+    def set_remains2pinks(self, dirty_poses):
+        """获胜时使用，把所有没翻开的变成粉色块，返回dirty的pos"""
         for x, y, block in self.allBlocksM():
-            block.setType(BlockType.PINK)
+            if block.isClosed():
+                block.setType(BlockType.PINK)
+                dirty_poses.append((x, y))
 
     def rightClick(self, x, y, dirty_poses: Optional[List[Tuple[int, int]]] = None) -> ClickResult:
         # If Closed:
@@ -352,28 +360,32 @@ class Map(object):
             if self._MAPm[x][y].getNum() == flag_cnt:
                 # auto click Closed neighbors
                 for nx, ny in closedNeighborPoses:
-                    if self.leftClick(nx, ny, dirty_poses).isLose():
+                    clickRes = self.leftClick(nx, ny, dirty_poses)
+                    if clickRes.isLose():
                         return ClickResult(RESULT.LOSE)
-                if self._closed_cnt == 0:
-                    return ClickResult(RESULT.WIN)
-                else:
-                    return ClickResult(RESULT.CONTINUE_CHANGED)
+                    elif clickRes.isWin():
+                        return ClickResult(RESULT.WIN)
+
+                return ClickResult(RESULT.CONTINUE_CHANGED)
 
         return ClickResult(RESULT.CONTINUE_NOCHANGE)
 
     def leftClick(self, x, y, dirty_poses: Optional[List[Tuple[int, int]]] = None) -> ClickResult:
-        #init flag to record if map has changed
+        """
+        If Closed: replace with real block.
+            If opened to:
+               mine, game over.
+               empty, empty_cnt--, auto bfs.
+            If closed_cnt == mine_cnt, game won.
+        Else (Flag or Opened): do nothing
+        """
+
+        # init flag to record if map has changed
         hasChanged = Flag()
 
         # Generate Map on First Click
         if self.firstGen:
             self.generate((x, y))
-
-        # If Closed: replace with real block.
-        # If mine, game over.
-        # If empty, empty_cnt--, auto bfs.
-        # If no empty blocks, game won.
-        # Else (Flag or Opened): do nothing
 
         queue = list()
         queue.append((x,y))
@@ -384,10 +396,11 @@ class Map(object):
                 # only closed block is clickable, and is dirty
                 dirty_poses.append((x,y)) if dirty_poses is not None else None
                 hasChanged.set()
-                if self._openBlock(x, y): return ClickResult(RESULT.LOSE) # game over/ game won
+                if self._openBlock(x, y): return ClickResult(RESULT.LOSE) # game over
 
                 # remaining closed blocks =
                 self._closed_cnt -= 1
+                # print(f'closed={self._closed_cnt}')
 
                 if self._MAPr[x][y].isEmpty():
                     # if is empty block,
@@ -395,8 +408,8 @@ class Map(object):
                     for nx, ny, _ in self.neighborBlocksM(x, y):
                         queue.append((nx,ny))
 
-        # if no empty left, game win
-        if self._closed_cnt == 0:
+        # if 没开的只剩雷, game win
+        if self._closed_cnt == self._MINE_cnt:
             return ClickResult(RESULT.WIN)
         else:
             return ClickResult(RESULT.CONTINUE_CHANGED) if hasChanged.get() else ClickResult(RESULT.CONTINUE_NOCHANGE)

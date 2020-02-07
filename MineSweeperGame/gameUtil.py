@@ -25,7 +25,9 @@ class GameUtil(object):
         self.clickResult = None #type: ClickResult
         self.enable_algo = None #type: bool
         self.AlgoSolver = None #type: AlgoSolver
-        self.fontObj = pygame.font.SysFont(self.FONT_YAHEI, 50)
+
+        self.fontObj = pygame.font.SysFont(self.FONT_HEITI, 25)
+        self.fontbgObj = pygame.font.SysFont(self.FONT_HEITI, 26)
 
     def _blitAllBlocks(self):
         # blit all blocks to screen
@@ -38,7 +40,7 @@ class GameUtil(object):
     #     textSurf = fontObj.render(text, True, (0,0,0)) # Black
     #     self.screen.blit(textSurf, dest)
 
-    def startNewGame(self, enable_algo: Optional[bool]=False, _map: Optional[Map] = Map(Difficulty.NORMAL), scale: Optional[float] = 0.5):
+    def startNewGame(self, _map: Optional[Map] = Map(Difficulty.NORMAL), enable_algo: Optional[bool]=False, scale: Optional[float] = 0.5):
         """
         :param enable_algo: use algorithm sovling or not
         :param scale: scale the size of the screen
@@ -105,118 +107,166 @@ class GameUtil(object):
         # enter main loop
         self._main_loop()
 
+        # exit
+        pygame.quit()
 
     def _main_loop(self):
         # main loop
         imgi=0
         exitFlag = Flag()
         for rnd in count(1): # 无限循环直到按下esc
-            dirty_rects = list()  # type: List[pygame.Rect]
-            dirty_poses = list()  # type: List[Tuple[int, int]]
+            while True:
+                dirty_rects = list()  # type: List[pygame.Rect]
+                dirty_poses = list()  # type: List[Tuple[int, int]]
+                # event = pygame.event.wait()  # type: pygame.event.EventType
+                for event in pygame.event.get():
+                    if event.type == MOUSEBUTTONUP:
+                        # click block
+                        MousePos = event.dict['pos']
+                        MouseButn = event.dict['button']
 
-            # event = pygame.event.wait()  # type: pygame.event.EventType
-            for event in pygame.event.get():
-                if event.type == QUIT:
-                    # exit()
-                    pygame.quit()
-                    break
-                elif event.type == MOUSEBUTTONUP:
-                    # click block
-                    MousePos = event.dict['pos']
-                    MouseButn = event.dict['button']
+                        # get block id
+                        x, y = None, None
+                        for i in range(self.map.get_nums[0]):
+                            for j in range(self.map.get_nums[1]):
+                                if self.block_rects[i][j].collidepoint(*MousePos): # TODO 按键在缝里？
+                                    x, y = i + 1, j + 1
 
-                    # get block id
-                    x, y = None, None
-                    for i in range(self.map.get_nums[0]):
-                        for j in range(self.map.get_nums[1]):
-                            if self.block_rects[i][j].collidepoint(*MousePos):
-                                x, y = i + 1, j + 1
-
-                    if x and y:
-                        if MouseButn == 1:
-                            # left click
-                            self._do_Left_Click(x, y, dirty_poses)
-                        elif MouseButn == 2:
-                            # mid click
-                            self._do_Mid_Click(x, y, dirty_poses)
-                        else:
-                            # right click
-                            self._do_Right_Click(x, y, dirty_poses)
-                        # blit dirty blocks
-                        for _x, _y in dirty_poses:
-                            tile_i = self.map.mm[_x][_y].getTileI().value
-                            self.screen.blit(self.tile_list[tile_i], (
-                            int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
-                        # log dirty rects for update screen
-                        for x, y in dirty_poses:
-                            dirty_rects.append(self.block_rects[x - 1][y - 1])
-
-                elif event.type == KEYUP:
-                    if event.key == K_RETURN:
-                        # 截图
-                        # print("RETURN pressed")
-                        pygame.image.save(self.screen, f"currMap{imgi}.png")
-                        print(f"Screen shot currMap{imgi}.png")
-                        imgi+=1
-                    elif event.key == K_ESCAPE:
-                        # esc 退出游戏
-                        pygame.display.quit()
-                        exitFlag.set()
-                        break
-                    elif self.enable_algo:
-                        self.clickResult = self.AlgoSolver.step(dirty_poses)
-                        if not DEBUG:
+                        if x and y:
+                            if MouseButn == 1:
+                                # left click
+                                self._do_Left_Click(x, y, dirty_poses)
+                            elif MouseButn == 2:
+                                # mid click
+                                self._do_Mid_Click(x, y, dirty_poses)
+                            else:
+                                # right click
+                                self._do_Right_Click(x, y, dirty_poses)
                             # blit dirty blocks
                             for _x, _y in dirty_poses:
                                 tile_i = self.map.mm[_x][_y].getTileI().value
                                 self.screen.blit(self.tile_list[tile_i], (
-                                    int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
+                                int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
                             # log dirty rects for update screen
                             for x, y in dirty_poses:
                                 dirty_rects.append(self.block_rects[x - 1][y - 1])
-                        else:
-                            # blit all blocks
-                            for _x, _y, thisBlock in self.map.allBlocksM():
-                                tile_i = thisBlock.getTileI().value
-                                self.screen.blit(self.tile_list[tile_i],(
-                                    int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
-                # else: print(str(event))
 
-            # 退出游戏
+                    elif event.type == KEYUP:
+                        if event.key == K_RETURN:
+                            # 截图
+                            # print("RETURN pressed")
+                            pygame.image.save(self.screen, f"currMap{imgi}.png")
+                            print(f"Screen shot currMap{imgi}.png")
+                            imgi+=1
+                        elif event.key == K_ESCAPE:
+                            # esc 退出游戏
+                            pygame.quit()
+                            exitFlag.set()
+                            break
+                        elif self.enable_algo:
+                            self.clickResult = self.AlgoSolver.step(dirty_poses)
+                            if not DEBUG:
+                                # blit dirty blocks
+                                for _x, _y in dirty_poses:
+                                    tile_i = self.map.mm[_x][_y].getTileI().value
+                                    self.screen.blit(self.tile_list[tile_i], (
+                                        int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
+                                # log dirty rects for update screen
+                                for x, y in dirty_poses:
+                                    dirty_rects.append(self.block_rects[x - 1][y - 1])
+                            else:
+                                # blit all blocks
+                                for _x, _y, thisBlock in self.map.allBlocksM():
+                                    tile_i = thisBlock.getTileI().value
+                                    self.screen.blit(self.tile_list[tile_i],(
+                                        int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
+                # print("out of event")
+
+                # 退出游戏
+                if exitFlag.get():
+                    print("游戏已退出")
+                    break
+
+                # 本轮游戏结束
+                if self.clickResult.isLose() or self.clickResult.isWin():
+                    if self.clickResult.isLose():
+                        textSurf = self.fontObj.render(f"第{rnd}轮失败！重新开始...", True, (
+                        0, 0, 0), (255, 255, 255))  # type: pygame.Surface  # text, 抗锯齿, color = Black
+                        # textbgSurf = self.fontbgObj.render(f"第{rnd}轮失败！重新开始...", True, (
+                        # 255, 255, 255))  # type: pygame.Surface # 大一圈描边
+                        print(f"第{rnd}轮失败！重新开始...")
+                    else:
+                        textSurf = self.fontObj.render(f"第{rnd}轮胜利！重新开始...", True, (
+                        0, 0, 0), (255, 255, 255))  # type: pygame.Surface  # text, 抗锯齿, color = Black, bg= white
+                        # textbgSurf = self.fontbgObj.render(f"第{rnd}轮胜利！重新开始...", True, (
+                        #     255, 255, 255))  # type: pygame.Surface # 大一圈描边
+
+                        # 把雷都变成粉色块并blit到screen，记录在dirty_rects中
+                        self.blit_remains2pinks(dirty_rects)
+                        print(f"第{rnd}轮胜利！重新开始...")
+
+                    textRect = pygame.Rect(
+                        (self.screen.get_width() - textSurf.get_width()) // 2,  # left
+                        (self.screen.get_height() - textSurf.get_height()) // 2, # top
+                        textSurf.get_width(),
+                        textSurf.get_height()
+                    )
+
+                    self.screen.blit(textSurf, (textRect.left, textRect.top))  # 生成黑色文字在屏幕中间
+                    # self.screen.blit(textbgSurf, ((self.screen.get_width() - textbgSurf.get_width()) // 2, (
+                    #         self.screen.get_height() - textbgSurf.get_height()) // 2))  # 生成白色描边文字在屏幕中间
+
+                    if not DEBUG:
+                        dirty_rects.append(textRect)
+                        pygame.display.update(dirty_rects) # 更新脏块（包括点开的地方和/或粉色块）和文字所在区域
+                    else:
+                        pygame.display.update()
+
+                    time.sleep(2)
+                    self.game_reset()
+                    break
+
+                else:
+                    # update dirty rects
+                    if not DEBUG:
+                        pygame.display.update(dirty_rects)
+                    else:
+                        pygame.display.update()
+
             if exitFlag.get():
-                print("游戏已退出")
                 break
 
-            # 本轮游戏结束
-            if self.clickResult.isLose() or self.clickResult.isWin():
-                if self.clickResult.isLose():
-                    textSurf = self.fontObj.render(f"第{rnd}轮失败！重新开始...", True, (0, 0, 0)) #type: pygame.Surface  # text, 抗锯齿, color = Black
-                    print(f"第{rnd}轮失败！重新开始...")
-                else:
-                    textSurf = self.fontObj.render(f"第{rnd}轮失败！重新开始...", True, (0, 0, 0)) #type: pygame.Surface  # text, 抗锯齿, color = Black
 
-                    self.map.set_mines2pinks() # 把雷都变成粉色块
-                    print(f"第{rnd}轮胜利！重新开始...")
-
-                self.screen.blit(textSurf, ((self.screen.get_width()-textSurf.get_width())//2, (self.screen.get_height()-textSurf.get_height())//2)) # 生成黑色文字在屏幕中间
-
-                pygame.display.update()
-                time.sleep(5)
-                continue
-
-            # update dirty rects
-            if not DEBUG:
-                pygame.display.update(dirty_rects)
-            else:
-                pygame.display.update()
-
-
+        # TODO 格子之间留点缝隙
         # TODO display mine cnt
+
+    def blit_remains2pinks(self, dirty_rects):
+        """
+        把雷都变成粉色块并blit到screen
+        :param dirty_rects: 用于加入脏的rect
+        """
+        dirty_poses = []
+
+        self.map.set_remains2pinks(dirty_poses)
+
+        # blit dirty blocks
+        for _x, _y in dirty_poses:
+            tile_i = self.map.mm[_x][_y].getTileI().value
+            self.screen.blit(self.tile_list[tile_i], (
+                int((_y - 1) * TILE_WIDTH * self.SCALE), int((_x - 1) * TILE_HEIGHT * self.SCALE)))
+
+        # log dirty rects for update screen
+        for x, y in dirty_poses:
+            dirty_rects.append(self.block_rects[x - 1][y - 1])
+
 
     def game_reset(self) -> None:
         """重置游戏"""
         # 重置mm和其他参数
         self.map.reset()
+
+        # blit background pic
+        self.screen.blit(self.bgsurf, (0, 0))
 
         # blit all blocks from map to screen
         self._blitAllBlocks()

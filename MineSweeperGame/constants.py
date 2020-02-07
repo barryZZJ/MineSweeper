@@ -1,7 +1,7 @@
 from enum import IntEnum
 from os.path import dirname
 
-DEBUG = True
+DEBUG = False
 
 # tile index of tile_list, start from 0
 class TILE(IntEnum):

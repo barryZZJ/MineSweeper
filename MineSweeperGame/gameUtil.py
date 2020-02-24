@@ -120,7 +120,9 @@ class GameUtil(object):
                 dirty_poses = list()  # type: List[Tuple[int, int]]
                 # event = pygame.event.wait()  # type: pygame.event.EventType
                 for event in pygame.event.get():
-                    if event.type == MOUSEBUTTONUP:
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                    elif event.type == MOUSEBUTTONUP:
                         # click block
                         MousePos = event.dict['pos']
                         MouseButn = event.dict['button']

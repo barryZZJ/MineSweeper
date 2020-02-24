@@ -31,6 +31,12 @@ class BlockType(IntEnum):
     NA = 15 # map的第0行和第0列不应该被显示，设置为无效块
 
 class Block(object):
+    def __float__(self):
+        return self._blocktype.__float__()
+
+    def __int__(self):
+        return self._blocktype
+
     def __init__(self, blocktype: Union[BlockType, int, None] = BlockType.NA, x=None, y=None):
         # self.x = x
         # self.y = y
@@ -143,6 +149,7 @@ class ClickResult(object):
         return self.result == RESULT.CONTINUE_CHANGED
 
 class Map(object):
+
     @staticmethod
     def getMapInfo(difficulty: Difficulty) -> Tuple[int, int, int]:
         '''returns num_x, num_y, mines'''
@@ -179,10 +186,10 @@ class Map(object):
         self._MAPm = [[Block(BlockType.CLOSED) for j in range(self._NUM_Y + 1)] for i in range(self._NUM_X + 1)]
         # -----------------------------------------------------
         # record remaining closed blocks to determine wether game won
-        self._closed_cnt = None # type: int
+        self._closed_cnt = None # type: int # remaining closed blocks (include mines and flags)
         # -----------------------------------------------------
         # record remaining mine cnt for hint (todo)
-        self._mine_cnt = None #type: int
+        self._remain_mine_hint = self._MINE_cnt
         # -----------------------------------------------------
         # is First Generate flag,
         # to determine if first click in self.leftClick()
@@ -257,6 +264,7 @@ class Map(object):
                 print("Input range error, try again")
         self._MAPr = None
         self._MAPm = None
+        self._remain_mine_hint = self._MINE_cnt #type: int
 
     def reset(self):
         '''重置'''
@@ -272,7 +280,7 @@ class Map(object):
         self._closed_cnt = None  # type: int
         # -----------------------------------------------------
         # record remaining mine cnt for hint (todo)
-        self._mine_cnt = None  # type: int
+        self._remain_mine_hint = self._MINE_cnt  # type: int
         # -----------------------------------------------------
         # is First Generate flag,
         # to determine if first click in self.leftClick()
@@ -284,7 +292,6 @@ class Map(object):
 
         self.firstGen = False # to determine if first click in self.leftClick(), generate on first click
         self._closed_cnt = self._NUM_X * self._NUM_Y # to determine wether game won: closed_cnt == mine_cnt
-        self._mine_cnt = self._MINE_cnt
         # -----------------------------------------------------
         # randomly put mines
         # 如果j或i是0，设为墙，其他设为NUM0
@@ -321,23 +328,23 @@ class Map(object):
 
     def rightClick(self, x, y, dirty_poses: Optional[List[Tuple[int, int]]] = None) -> ClickResult:
         # If Closed:
-        # Set Flag
+            # Set Flag
         # Elif Falg:
-        # Remove Flag
+            # Remove Flag
         # Else:
-        # Do nothing
+            # Do nothing
         if self._MAPm[x][y].isClosed():
             # set Flag
             self._MAPm[x][y].setType(BlockType.FLAG)
             dirty_poses.append((x, y)) if dirty_poses is not None else None
-            self._mine_cnt -= 1
+            self._remain_mine_hint -= 1
             return ClickResult(RESULT.CONTINUE_CHANGED)
 
         elif self._MAPm[x][y].isFlag():
             # remove Flag
             self._MAPm[x][y].setType(BlockType.CLOSED)
             dirty_poses.append((x, y)) if dirty_poses is not None else None
-            self._mine_cnt += 1
+            self._remain_mine_hint += 1
             return ClickResult(RESULT.CONTINUE_CHANGED)
 
         return ClickResult(RESULT.CONTINUE_NOCHANGE)
